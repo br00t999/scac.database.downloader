@@ -1,11 +1,11 @@
 Package: scac.database.downloader
 Type: Package
 Title: Download the SCAC database
-Version: 1.0
+Version: 0.1
 Date: 2015-05-07
 Author: Peter Taylor
 Maintainer: Peter Taylor <peter.taylor@taypeinternational.com>
-Description: Download the SCAC database from http://securities.stanford.edu
+Description: Download the SCAC database in tabular form from http://securities.stanford.edu
 License: BSD
 LazyData: true
 Suggests: 

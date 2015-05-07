@@ -2,15 +2,22 @@
 % Please edit documentation in R/scac_database_downloader.R
 \name{download.scac.database}
 \alias{download.scac.database}
-\title{Download the Most Recent Version SCAC Filings Database}
+\title{Download the Most Recent Version of the SCAC Filings Database}
 \usage{
-download.scac.database(debug = FALSE, update.cache = TRUE)
+download.scac.database(start.page = 1, debug = FALSE,
+  update.cache = FALSE, cache.file = file.path(system.file(package =
+  "scac.database.downloader", "data"), "scac-db-df.RData"))
 }
 \arguments{
+\item{start.page}{numeric Which page of the filings html database to start scraping from}
+
 \item{debug}{logical Whether or not to be verbose}
 
 \item{update.cache}{logical Whether or not to update the package dataset with most
 recently downloaded copy of the database}
+
+\item{cache.file}{character path to .rdata file where most recent copy of the scac db
+is stored}
 }
 \value{
 returns data.frame

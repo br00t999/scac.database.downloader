@@ -2,21 +2,26 @@
 #' @title Download the Most Recent Version of the SCAC Filings Database
 #' @description Download the database of securities class action fillings from SCAC
 #' as published at: http://securities.stanford.edu/filings.html
+#' @param start.page numeric Which page of the filings html database to start scraping from
 #' @param debug logical Whether or not to be verbose
 #' @param update.cache logical Whether or not to update the package dataset with most 
 #' recently downloaded copy of the database
+#' @param cache.file character path to .rdata file where most recent copy of the scac db
+#' is stored
 #' @return returns data.frame 
 #' @import httr XML data.table stringr
 #' @export
-download.scac.database <- function(debug = FALSE, update.cache = TRUE) {
-        p <- 1
-        next.page <- 2
+download.scac.database <- function(start.page = 1, 
+                                   debug = FALSE, 
+                                   update.cache = FALSE,
+                                   cache.file = file.path(system.file(package = 'scac.database.downloader', 'data'), 'scac-db-df.RData')) {
+        next.page <- page <- start.page
         data <- list(1e04) # pre-allocate a big list
         while(!is.na(next.page)) {
                 base.url <- 'http://securities.stanford.edu/'
-                url <- paste0('http://securities.stanford.edu/filings.html')
-                url <- modify_url(url, query = list(page = p))
-                if(debug) message(paste0('Getting ', url, '\n'))
+                url <- 'http://securities.stanford.edu/filings.html'
+                url <- modify_url(url, query = list(page = page))
+                if(debug) message(paste0('\nGetting ', url, '\n'))
                 if(debug) pg <- GET(url, config = verbose()) else pg <- GET(url)
                 # extract the list of filings
                 tbl <- readHTMLTable(content(pg), stringsAsFactors = FALSE)[[ 1 ]]
@@ -32,7 +37,7 @@ download.scac.database <- function(debug = FALSE, update.cache = TRUE) {
                 tbl <- setNames(tbl, str_replace_all(colnames(tbl), '[^A-Za-z]', ''))
                 tbl$CaseLink <- case.links
                 tbl$FilingDate <- as.Date(tbl$FilingDate, format = '%m/%d/%Y')
-                data[[ p ]] <- tbl
+                data[[ page ]] <- tbl
                 xpath <- '//div[ @class = "pagination pagination-right" ]//ul//li[ @class = "active" ]//a'
                 current.page <- str_replace_all(sapply(xpathApply(content(pg), xpath), 
                                                        xmlAttrs), '\\?page=', '')
@@ -42,15 +47,16 @@ download.scac.database <- function(debug = FALSE, update.cache = TRUE) {
                 next.page <- all.pages[ (which(all.pages == current.page) + 1) ]
                 # if we reach the last page stop
                 if(as.numeric(next.page) == as.numeric(current.page)) next.page <- NA 
-                p <- next.page
+                page <- next.page
                 Sys.sleep(runif(1, 1, 3)) # pause to be polite
         }
+        data <- data[ which(lapply(data, class) == 'data.frame') ]
         scac.db.df <- data.frame(rbindlist(data), stringsAsFactors = FALSE) 
         scac.db.df$DistrictCourt <- factor(scac.db.df$DistrictCourt)
         scac.db.df$Exchange <- factor(scac.db.df$Exchange)
         scac.db.df$Ticker <- factor(scac.db.df$Ticker)
         scac.db.df$FetchDate <- Sys.Date()
-        save(scac.db.df, file = 'data/scac-db-df.RData')
+        if(update.cache) save(scac.db.df, file = cache.file)
         scac.db.df
 }
 
