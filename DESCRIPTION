@@ -12,3 +12,4 @@ Suggests:
   testthat
 Imports:
   XML, data.table, httr, stringr
+RoxygenNote: 6.0.1

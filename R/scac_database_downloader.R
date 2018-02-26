@@ -4,101 +4,108 @@
 #' as published at: http://securities.stanford.edu/filings.html
 #' @param start.page numeric Which page of the filings html database to start scraping from
 #' @param debug logical Whether or not to be verbose
-#' @param update.cache logical Whether or not to update the package dataset with most 
-#' recently downloaded copy of the database
+#' @param update.cache logical If TRUE we download the entire database and update locally cached copy
+#' if FALSE we simply return the locally cached copy
 #' @param cache.file character path to .rdata file where most recent copy of the scac db
 #' is stored
 #' @return returns data.frame 
-#' @import httr XML data.table stringr
+#' @import httr rvest data.table stringr 
 #' @export
 download.scac.database <- function(start.page = 1, 
                                    debug = FALSE, 
                                    update.cache = FALSE,
-                                   cache.file = file.path(system.file(package = 'scac.database.downloader', 'data'), 'scac-db-df.RData')) {
-        next.page <- page <- start.page
-        data <- list(1e04) # pre-allocate a big list
-        while(!is.na(next.page)) {
+                                   cache.file = file.path(system.file(package = 'scac.database.downloader', 'data'), 'scacdb.rdata')) {
+        if (update.cache) {
                 base.url <- 'http://securities.stanford.edu/'
-                url <- 'http://securities.stanford.edu/filings.html'
-                url <- modify_url(url, query = list(page = page))
-                if(debug) message(paste0('\nGetting ', url, '\n'))
-                if(debug) pg <- GET(url, config = verbose()) else pg <- GET(url)
-                # extract the list of filings
-                tbl <- readHTMLTable(content(pg), stringsAsFactors = FALSE)[[ 1 ]]
-                # extract the list of links to cases
-                xpath <- '//tr[ @class = "table-link" ]'
-                case.links <- paste0(base.url, 
-                                     str_replace_all(sapply(lapply(xpathApply(content(pg), 
-                                                                              xpath), 
-                                                                   xmlAttrs), '[', 
-                                                            'onclick'), 
-                                                     'window.location=\'|\'', ''))
-                # clean up column names
-                tbl <- setNames(tbl, str_replace_all(colnames(tbl), '[^A-Za-z]', ''))
-                tbl$CaseLink <- case.links
-                tbl$FilingDate <- as.Date(tbl$FilingDate, format = '%m/%d/%Y')
-                data[[ page ]] <- tbl
-                xpath <- '//div[ @class = "pagination pagination-right" ]//ul//li[ @class = "active" ]//a'
-                current.page <- str_replace_all(sapply(xpathApply(content(pg), xpath), 
-                                                       xmlAttrs), '\\?page=', '')
-                xpath <- '//div[ @class = "pagination pagination-right" ]//ul//li//a'
-                all.pages <- str_replace_all(sapply(xpathApply(content(pg), xpath), 
-                                                    xmlAttrs), '\\?page=', '')
-                next.page <- all.pages[ (which(all.pages == current.page) + 1) ]
-                # if we reach the last page stop
-                if(as.numeric(next.page) == as.numeric(current.page)) next.page <- NA 
-                page <- next.page
-                Sys.sleep(runif(1, 1, 3)) # pause to be polite
-        }
-        data <- data[ which(lapply(data, class) == 'data.frame') ]
-        scac.db.df <- data.frame(rbindlist(data), stringsAsFactors = FALSE) 
-        scac.db.df$DistrictCourt <- factor(scac.db.df$DistrictCourt)
-        scac.db.df$Exchange <- factor(scac.db.df$Exchange)
-        scac.db.df$Ticker <- factor(scac.db.df$Ticker)
-        scac.db.df$FetchDate <- Sys.Date()
-        if(update.cache) save(scac.db.df, file = cache.file)
-        scac.db.df
-}
+                filings.url <- 'http://securities.stanford.edu/filings.html'
+                next.page <- start.page
+                page <- start.page
+                data <- list(1e04) # pre-allocate a big list
+                while(!is.na(next.page)) {
+                        message('downloading page ', page, ' of scac database')
+                        
+                        # download page
+                        url <- sprintf('%s?page=%s', filings.url, page)
+                        if(debug) message(paste0('\nGetting ', url, '\n'))
+                        if(debug) pg <- GET(url, config = verbose()) else pg <- GET(url)
+                        pg <- content(pg)
+                        
+                        # extract the list of filings
+                        tbl <- html_table(pg)[[ 1 ]]
+                        
+                        # extract the list of links to cases
+                        case.links <- html_nodes(pg, 'tr.table-link')
+                        case.links <- html_attrs(case.links)
+                        case.links <- lapply(case.links, '[', 'onclick')
+                        case.links <- str_extract_all(case.links, 'filings-case.html\\?id=[0-9]+')
+                        case.links <- unlist(case.links)
+                        case.links <- paste0(base.url, case.links)
+                        
+                        # download summaries
+                        summaries <- lapply(case.links, function(x) {
+                                Sys.sleep(2)
+                                message('downloading case details ', x)
+                                tmp <- read_html(x)
+                                smtxt <- html_nodes(tmp, '#summary')
+                                smtxt <- html_text(smtxt)
+                                smtxt <- str_replace_all(smtxt, '\\s+', ' ')
+                                smtxt <- str_trim(smtxt)
+                                sector <- html_text(html_nodes(tmp, '#company > div:nth-child(3) > div:nth-child(1)'))
+                                industry <- html_text(html_nodes(tmp, '#company > div:nth-child(3) > div:nth-child(2)'))
+                                headquarters <- html_text(html_nodes(tmp, '#company > div:nth-child(3) > div:nth-child(3)'))
+                                fic <- html_text(html_nodes(tmp, '#fic > div:nth-child(1) > h4:nth-child(2)'))
+                                docket <- html_text(html_nodes(tmp, 'div.row-fluid:nth-child(2) > div:nth-child(2)')[ 1 ])
+                                judge <- html_text(html_nodes(tmp, 'div.row-fluid:nth-child(2) > div:nth-child(3)')[ 1 ])
+                                firms <- paste0(html_text(html_nodes(tmp, '.styled > li')), collapse = '\n')
+                                data.frame(CaseSummary = smtxt, 
+                                           Sector = sector, 
+                                           Industry = industry, 
+                                           Headquarters = headquarters,
+                                           FirstIdentifiedComplainant = fic,
+                                           Judge = judge,
+                                           PlaintiffFirms = firms)
+                        })
+                        tmp <- rbindlist(summaries, use.names = TRUE, fill = TRUE)
+                        tmp <- as.data.frame(tmp)
+                        tbl <- data.frame(tbl, tmp)
+                        
+                        # clean up column names
+                        tbl <- setNames(tbl, str_replace_all(colnames(tbl), '[^A-Za-z]', ''))
+                        tbl$CaseLink <- case.links
+                        tbl[] <- lapply(tbl, as.character)
+                        data[[ page ]] <- tbl
 
-#'  The Securities Class Action Clearinghouse (SCAC) provides detailed information 
-#'  relating to the prosecution, defense, and settlement of federal class action 
-#'  securities fraud litigation.
-#'  
-#'  The SCAC team maintains a Filings database of more than 3,800 securities class 
-#'  action lawsuits filed since passage of the Private Securities Litigation Reform 
-#'  Act of 1995. The database also contains copies of more than 44,000 complaints, 
-#'  briefs, filings, and other litigation-related materials filed in these cases.
-#'  
-#'  In 2002 Joseph A. Grundfest, founder and Principal Investigator of the SCAC wrote:
-#'  
-#'      "The Stanford Clearinghouse offers information that is substantially more detailed 
-#'      and timely than can be found on other services, which generally limit their 
-#'      databases to judicial decisions. By accessing this site, each user can form 
-#'      his or her own opinion as to whether litigation is with or without merit, 
-#'      whether too few or too many companies are being sued, and whether recoveries 
-#'      are too small or too large."
-#'      
-#'  The SCAC offers regular updates identifying companies that have recently been 
-#'  named as defendants in federal class action securities fraud complaints. 
-#'  Institutional investors with more than $1.5 trillion in assets under 
-#'  management are registered with the SCAC to receive automatic notices of 
-#'  litigation developments that may affect investments in their portfolios. 
-#'  All members of the public are invited to register to receive prompt notification 
-#'  of litigation developments. If you would like to receive this information, 
-#'  please register here: \url{http://securities.stanford.edu/about-the-scac.html#register}.
-#' 
-#' The variables are as follows:
-#'
-#' \itemize{
-#'  \item FilingName
-#'  \item FilingDate
-#'  \item DistrictCourt
-#'  \item Exchange
-#'  \item Ticker
-#'  \item CaseLink
-#' }
-#'
-#' @format A data.table with 3945 rows and 6 variables
-#' @source The Securities Class Action Clearinghouse (SCAC) \url{http://securities.stanford.edu/}
-#' @name scac.db.df
-NULL
+                        # what page are we on and what is the next one?
+                        nav <- html_nodes(pg, 'div.pagination-right > ul > li')
+                        idx <- which(lapply(html_attrs(nav), '[', 'class') == 'active')
+                        has.next <- lapply(html_attrs(nav), '[', 'class')[ idx + 1 ] != 'disabled'
+                        current.page <- html_text(nav[ idx ])
+                        next.page <- html_text(nav[ idx + 1 ])
+                        
+                        # when we reach the end of pages, next.page will be NA
+                        next.page <- suppressWarnings(as.numeric(next.page))
+                        if (is.na(next.page)) {
+                                if (has.next) {
+                                        next.page <- as.integer(current.page) + 1        
+                                } else {
+                                        message('we have reached the end of the scac database')
+                                        next.page <- NA        
+                                }
+                                
+                        }
+                        page <- next.page
+                        Sys.sleep(2) # pause to be polite
+                }
+                idx <- which(lapply(data, class) == 'data.frame')
+                data <- data[ idx ]
+                scac.db <- rbindlist(data, use.names = TRUE, fill = TRUE) 
+                scac.db <- as.data.frame(scac.db)
+                scac.db[] <- lapply(scac.db, as.character)
+                scac.db$FilingDate <- as.Date(scac.db$FilingDate, format = '%m/%d/%Y')
+                scac.db$FetchDate <- Sys.Date()
+                save('scac.db', file = cache.file)        
+        } else {
+                load(cache.file)
+        }
+        scac.db
+}
