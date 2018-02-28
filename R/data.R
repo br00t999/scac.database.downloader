@@ -14,13 +14,19 @@
 #' 
 #' @format A data.frame with 3000+ rows and 7 variables
 #' \itemize{
-#'  \item FilingName
-#'  \item FilingDate
-#'  \item DistrictCourt
-#'  \item Exchange
-#'  \item Ticker
-#'  \item CaseLink
-#'  \item FetchDate
+#'  \item FilingDate: filing date
+#'  \item DistrictCourt: court 
+#'  \item Exchange: exchange
+#'  \item Ticker: ticker symbol
+#'  \item CaseSummary: summmary
+#'  \item Sector: sector
+#'  \item Industry: industry
+#'  \item Headquarters: headquarters location
+#'  \item FirstIdentifiedComplainant: first identified complainant
+#'  \item Judge: presiding judge
+#'  \item PlaintiffFirms: plaintiff law firms
+#'  \item CaseLink: link to full case details
+#'  \item FetchDate: date record was last fetched on
 #' }
 #' @source The Securities Class Action Clearinghouse (SCAC) \url{http://securities.stanford.edu/}
 'scac.db'
