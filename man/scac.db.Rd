@@ -4,7 +4,7 @@
 \name{scac.db}
 \alias{scac.db}
 \title{The Securities Class Action Clearinghouse (SCAC)}
-\format{A data.frame with 3000+ rows and 7 variables
+\format{A data.frame with 3000+ rows and 14 variables
 \itemize{
 \item FilingDate: filing date
 \item DistrictCourt: court 
