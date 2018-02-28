@@ -6,6 +6,7 @@
 \title{The Securities Class Action Clearinghouse (SCAC)}
 \format{A data.frame with 3000+ rows and 14 variables
 \itemize{
+\item FilingName: name of the filing
 \item FilingDate: filing date
 \item DistrictCourt: court 
 \item Exchange: exchange
