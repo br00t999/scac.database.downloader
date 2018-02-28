@@ -14,6 +14,7 @@
 #' 
 #' @format A data.frame with 3000+ rows and 7 variables
 #' \itemize{
+#'  \item FilingName: name of the filing
 #'  \item FilingDate: filing date
 #'  \item DistrictCourt: court 
 #'  \item Exchange: exchange
